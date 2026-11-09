@@ -216,7 +216,7 @@ void performOTA(const String& firmwareUrl) {
   stream->setTimeout(15000); // 15 seconds stream read timeout
 
   size_t written = 0;
-  uint8_t buff[4096]; // 4 KB fast read buffer
+  static uint8_t buff[2048]; // Static buffer (0 stack usage, prevents stack canary overflow)
   int lastProgress = -1;
   unsigned long timeoutStart = millis();
 
