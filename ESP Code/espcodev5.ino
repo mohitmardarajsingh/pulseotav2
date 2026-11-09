@@ -217,46 +217,22 @@ void performOTA(const String& firmwareUrl) {
     return;
   }
 
+  // Register real-time progress callback
+  Update.onProgress([](size_t current, size_t total) {
+    static int lastPercent = -1;
+    int percent = (current * 100) / total;
+    if (percent % 10 == 0 && percent != lastPercent) {
+      Serial.printf("[OTA] Progress: %d%% (%u / %u bytes)\n", percent, current, total);
+      lastPercent = percent;
+    }
+  });
+
   Serial.println("[OTA] Flashing firmware into memory... Please wait.");
   WiFiClient* stream = http.getStreamPtr();
-  stream->setTimeout(15000); // 15 seconds stream read timeout
+  stream->setTimeout(30000);  // 30 seconds stream timeout
 
-  size_t written = 0;
-  static uint8_t buff[2048]; // Static buffer (0 stack usage, prevents stack canary overflow)
-  int lastProgress = -1;
-  unsigned long timeoutStart = millis();
-
-  while (http.connected() && (written < (size_t)contentLength)) {
-    size_t available = stream->available();
-    if (available > 0) {
-      size_t toRead = available > sizeof(buff) ? sizeof(buff) : available;
-      int bytesRead = stream->read(buff, toRead); // Immediate non-blocking socket read
-      if (bytesRead > 0) {
-        size_t bytesWritten = Update.write(buff, bytesRead);
-
-        if (bytesWritten != (size_t)bytesRead) {
-          Serial.printf("[OTA] Flash write mismatch (Read: %d, Written: %d)\n", bytesRead, bytesWritten);
-          break;
-        }
-
-        written += bytesWritten;
-        timeoutStart = millis(); // Reset timeout on every successful read
-
-        int progress = (written * 100) / contentLength;
-        if (progress % 10 == 0 && progress != lastProgress) {
-          Serial.printf("[OTA] Progress: %d%% (%u / %d bytes)\n", progress, written, contentLength);
-          lastProgress = progress;
-        }
-      }
-    } else {
-      delay(1);
-      yield();
-      if (millis() - timeoutStart > 25000) { // 25 seconds of continuous silence before declaring timeout
-        Serial.println("[OTA] Error: Stream stalled (no data received for 25s).");
-        break;
-      }
-    }
-  }
+  // writeStream buffers 4096-byte sectors for full-speed SPI flash writes
+  size_t written = Update.writeStream(*stream);
 
   Serial.printf("[OTA] Total bytes written: %u of %d\n", written, contentLength);
 
