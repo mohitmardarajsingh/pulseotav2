@@ -11,19 +11,6 @@ const nextConfig = {
           },
         ],
       },
-      {
-        source: "/ota/:path*.bin",
-        headers: [
-          {
-            key: "Cache-Control",
-            value: "no-transform, public, max-age=31536000, immutable",
-          },
-          {
-            key: "Content-Disposition",
-            value: "attachment",
-          },
-        ],
-      },
     ];
   },
 };
