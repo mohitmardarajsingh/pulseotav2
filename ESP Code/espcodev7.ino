@@ -55,6 +55,9 @@ unsigned long lastOTACheck = 0;
 void setAllRelays(int state) {
   for (int i = 0; i < NUM_RELAYS; i++) {
     digitalWrite(relayPins[i], state);
+    if (state == RELAY_ON_STATE) {
+      delay(30); // 30ms stagger prevents simultaneous coil inrush current & brownouts
+    }
   }
 }
 
@@ -223,8 +226,8 @@ void performOTA(const String& firmwareUrl) {
 
   Serial.println("[OTA] Downloading and flashing firmware in chunks...");
 
-  // Step 2: Download in 300 KB chunks (aligned to 4KB sectors) to stay well under Vercel's 60s timeout
-  const size_t CHUNK_SIZE = 300 * 1024; // 307,200 bytes (~16s per chunk)
+  // Step 2: Download in 256 KB chunks (aligned to 4KB sectors) to stay well under Vercel's 60s timeout
+  const size_t CHUNK_SIZE = 256 * 1024; // 262,144 bytes (~12s per chunk)
   size_t totalWritten = 0;
   static uint8_t buf[2048]; // Static buffer (0 stack usage)
   int lastProgress = -1;
@@ -264,39 +267,38 @@ void performOTA(const String& firmwareUrl) {
     }
 
     WiFiClient* stream = chunkHttp.getStreamPtr();
-    stream->setTimeout(15000);
+    stream->setTimeout(20000); // 20-second read timeout per readBytes call
 
     size_t chunkRead = 0;
-    unsigned long lastReadTime = millis();
+    while (chunkRead < expectedBytes) {
+      size_t toRead = expectedBytes - chunkRead;
+      if (toRead > sizeof(buf)) {
+        toRead = sizeof(buf);
+      }
 
-    while (chunkHttp.connected() && (chunkRead < expectedBytes)) {
-      int r = stream->read(buf, sizeof(buf));
-      if (r > 0) {
-        lastReadTime = millis();
-        size_t w = Update.write(buf, r);
-        if (w != (size_t)r) {
-          Serial.println("\n[OTA] Flash write error!");
-          chunkHttp.end();
-          Update.abort();
-          return;
-        }
-        chunkRead += r;
-        totalWritten += r;
+      int r = stream->readBytes((char*)buf, toRead);
+      if (r <= 0) {
+        Serial.printf("\n[OTA] Error: Stream timeout waiting for chunk data (%u / %u bytes read).\n", (unsigned int)chunkRead, (unsigned int)expectedBytes);
+        chunkHttp.end();
+        Update.abort();
+        return;
+      }
 
-        int progress = (totalWritten * 100) / contentLength;
-        if (progress % 10 == 0 && progress != lastProgress) {
-          Serial.printf("[OTA] Progress: %d%% (%u / %d bytes)\n", progress, (unsigned int)totalWritten, contentLength);
-          lastProgress = progress;
-        }
-      } else {
-        delay(2);
-        yield();
-        if (millis() - lastReadTime > 15000) {
-          Serial.println("\n[OTA] Error: Chunk read timeout (15s)");
-          chunkHttp.end();
-          Update.abort();
-          return;
-        }
+      size_t w = Update.write(buf, r);
+      if (w != (size_t)r) {
+        Serial.println("\n[OTA] Flash write error!");
+        chunkHttp.end();
+        Update.abort();
+        return;
+      }
+
+      chunkRead += r;
+      totalWritten += r;
+
+      int progress = (totalWritten * 100) / contentLength;
+      if (progress % 10 == 0 && progress != lastProgress) {
+        Serial.printf("[OTA] Progress: %d%% (%u / %d bytes)\n", progress, (unsigned int)totalWritten, contentLength);
+        lastProgress = progress;
       }
     }
 
