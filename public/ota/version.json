@@ -1,5 +1,5 @@
 {
-    "version": "0.0.4",
-    "url": "https://pulseotav2.vercel.app/ota/firmware_0.0.4.bin",
-    "notes": "4-Channel Relay delay: 0.1s ON / 1s OFF"
+    "version": "0.0.1",
+    "url": "https://pulseotav2.vercel.app/ota/firmware_0.0.1.bin",
+    "notes": "4-Channel Relay delay: 5s ON / 5s OFF"
 }
