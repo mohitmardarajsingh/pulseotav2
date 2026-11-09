@@ -171,25 +171,23 @@ void checkOTA() {
 }
 
 // ------------------------------------------------------------
-//  Direct Stream OTA Flashing Engine
+//  Direct Stream OTA Flashing Engine (Minimal & Fast)
 // ------------------------------------------------------------
 void performOTA(const String& firmwareUrl) {
   Serial.printf("[OTA] Connecting to firmware server: %s\n", firmwareUrl.c_str());
 
   // Disable all 4 relays during update for safety
-  Serial.println("[OTA] Disabling all 4 relays for safety during flash write...");
   setAllRelays(RELAY_OFF_STATE);
 
-  WiFiClientSecure updateClient;
-  updateClient.setInsecure(); // Skip SSL certificate verification
-  updateClient.setTimeout(30);
+  WiFiClientSecure client;
+  client.setInsecure(); // Skip SSL certificate verification
 
   HTTPClient http;
   http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
-  http.setTimeout(30000); // 30 second socket timeout
+  http.setTimeout(30000); // 30 seconds (30000 ms)
 
-  if (!http.begin(updateClient, firmwareUrl)) {
-    Serial.println("[OTA] Error: Unable to initialize connection to firmware URL.");
+  if (!http.begin(client, firmwareUrl)) {
+    Serial.println("[OTA] Error: Unable to connect to server.");
     return;
   }
 
@@ -198,7 +196,7 @@ void performOTA(const String& firmwareUrl) {
   Serial.printf("[OTA] Server HTTP Response Code: %d\n", httpCode);
 
   if (httpCode != HTTP_CODE_OK) {
-    Serial.printf("[OTA] Error: Server returned non-200 code: %d\n", httpCode);
+    Serial.printf("[OTA] Failed, HTTP error code: %d\n", httpCode);
     http.end();
     return;
   }
@@ -207,72 +205,35 @@ void performOTA(const String& firmwareUrl) {
   Serial.printf("[OTA] Firmware binary size: %d bytes\n", contentLength);
 
   if (contentLength <= 0) {
-    Serial.println("[OTA] Error: Invalid firmware content length.");
+    Serial.println("[OTA] Error: Invalid firmware size.");
     http.end();
     return;
   }
 
-  if (!Update.begin(contentLength, U_FLASH)) {
+  if (!Update.begin(contentLength)) {
     Serial.printf("[OTA] Update.begin failed! Error: %s\n", Update.errorString());
     http.end();
     return;
   }
 
-  Serial.println("[OTA] Streaming firmware into flash... Please do not disconnect power.");
+  Serial.println("[OTA] Flashing firmware into memory... Please wait.");
   WiFiClient* stream = http.getStreamPtr();
-  size_t written = 0;
-  uint8_t buff[1024];
-  int lastProgress = -1;
-  unsigned long timeoutStart = millis();
+  size_t written = Update.writeStream(*stream);
 
-  while (http.connected() && (written < (size_t)contentLength)) {
-    size_t available = stream->available();
-    if (available > 0) {
-      size_t toRead = available > sizeof(buff) ? sizeof(buff) : available;
-      size_t bytesRead = stream->readBytes(buff, toRead);
-      size_t bytesWritten = Update.write(buff, bytesRead);
+  Serial.printf("[OTA] Total bytes written: %u of %d\n", written, contentLength);
 
-      if (bytesWritten != bytesRead) {
-        Serial.printf("[OTA] Error: Flash write mismatch (Read: %d, Written: %d)\n", bytesRead, bytesWritten);
-        break;
-      }
-
-      written += bytesWritten;
-      timeoutStart = millis(); // Reset timeout counter on successful read
-
-      int progress = (written * 100) / contentLength;
-      if (progress % 10 == 0 && progress != lastProgress) {
-        Serial.printf("[OTA] Progress: %d%% (%u / %d bytes)\n", progress, written, contentLength);
-        lastProgress = progress;
-      }
+  if (Update.end()) {
+    if (Update.isFinished()) {
+      Serial.println("============================================");
+      Serial.println("[OTA] UPDATE SUCCESSFUL! Rebooting device...");
+      Serial.println("============================================");
+      delay(1000);
+      ESP.restart();
     } else {
-      delay(1);
-      if (millis() - timeoutStart > 20000) { // 20 seconds without receiving any data
-        Serial.println("[OTA] Error: Download stream timed out (20s no data).");
-        break;
-      }
-    }
-  }
-
-  Serial.printf("[OTA] Download complete. Total bytes written: %u of %d\n", written, contentLength);
-
-  if (written == (size_t)contentLength) {
-    if (Update.end(true)) {
-      if (Update.isFinished()) {
-        Serial.println("============================================");
-        Serial.println("[OTA] UPDATE SUCCESSFUL! Rebooting new firmware...");
-        Serial.println("============================================");
-        delay(1000);
-        ESP.restart();
-      } else {
-        Serial.println("[OTA] Error: Update not finished.");
-      }
-    } else {
-      Serial.printf("[OTA] Update.end() failed! Error: %s\n", Update.errorString());
+      Serial.println("[OTA] Error: Update not finished.");
     }
   } else {
-    Update.abort();
-    Serial.printf("[OTA] Error: Written bytes (%u) != Content-Length (%d). Aborted.\n", written, contentLength);
+    Serial.printf("[OTA] Error: %s\n", Update.errorString());
   }
 
   http.end();
