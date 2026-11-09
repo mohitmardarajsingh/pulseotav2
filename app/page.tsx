@@ -17,7 +17,7 @@ export default function Home() {
   const [copiedEndpoint, setCopiedEndpoint] = useState(false);
   const [copiedCurl, setCopiedCurl] = useState(false);
 
-  const endpointUrl = "https://esp32update.vercel.app/ota/version.json";
+  const endpointUrl = "https://pulseotav2.vercel.app/ota/version.json";
   const curlCommand = `curl ${endpointUrl}`;
 
   useEffect(() => {

@@ -35,13 +35,13 @@ PulseOTA/
 
 ## version.json Format
 
-The version file served at `https://esp32update.vercel.app/ota/version.json` follows this format:
+The version file served at `https://pulseotav2.vercel.app/ota/version.json` follows this format:
 
 ```json
 {
   "version": "0.0.1",
-  "url": "https://esp32update.vercel.app/ota/firmware_0.0.1.bin",
-  "notes": "Initial release — relay toggle every 2 seconds"
+  "url": "https://pulseotav2.vercel.app/ota/firmware_0.0.1.bin",
+  "notes": "Initial release — 4-channel relay toggle every 5 seconds"
 }
 ```
 
@@ -68,8 +68,8 @@ Open `public/ota/version.json` and update the content with the new version strin
 ```json
 {
   "version": "0.0.2",
-  "url": "https://esp32update.vercel.app/ota/firmware_0.0.2.bin",
-  "notes": "Enabled status LED blink indicator; fixed memory leak"
+  "url": "https://pulseotav2.vercel.app/ota/firmware_0.0.2.bin",
+  "notes": "4-Channel Relay delay: 2s ON / 0.5s OFF"
 }
 ```
 
@@ -87,18 +87,25 @@ Upon the next boot or at its next scheduled polling interval, the ESP32 queries 
 
 ---
 
-## ESP32 Firmware Version String Location
+## ESP32 Firmware Configuration
 
-Ensure your ESP32 Arduino sketch has a defined local version constant to prevent infinite update loops:
+Ensure your ESP32 Arduino sketch has a defined local version constant and 4-channel relay pin definitions:
 
 ```cpp
 #include <WiFi.h>
 #include <HTTPClient.h>
-#include <Update.h>
+#include <HTTPUpdate.h>
 
 // Version configuration
 const String CURRENT_VERSION = "0.0.1";
-const String VERSION_URL = "https://esp32update.vercel.app/ota/version.json";
+const char* VERSION_URL = "https://pulseotav2.vercel.app/ota/version.json";
+
+// 4-Channel Relay GPIO Pins (Relay 1: GPIO 32, Relay 2: GPIO 33, Relay 3: GPIO 26, Relay 4: GPIO 27)
+#define RELAY1_PIN 32
+#define RELAY2_PIN 33
+#define RELAY3_PIN 26
+#define RELAY4_PIN 27
+const int relayPins[4] = { RELAY1_PIN, RELAY2_PIN, RELAY3_PIN, RELAY4_PIN };
 ```
 
 Ensure your update function compares `CURRENT_VERSION` with the fetched version string and only calls the update execution when the cloud version is different/newer.
@@ -117,13 +124,13 @@ Ensure your update function compares `CURRENT_VERSION` with the fetched version 
 
 ## Cloudflare DNS Setup
 
-To route your custom domain (e.g., `esp32update.vercel.app` or your own custom domain) to Vercel:
+To route your custom domain (e.g., `pulseotav2.vercel.app` or your own custom domain) to Vercel:
 
 1. In the **Vercel** project dashboard, go to **Settings** &rarr; **Domains**.
 2. Add your custom domain (or use the auto-assigned `vercel.app` subdomain).
 3. In your **Cloudflare** DNS dashboard, add the following CNAME record:
    - **Type**: `CNAME`
-   - **Name**: `esp32update`
+   - **Name**: `pulseotav2`
    - **Target**: `cname.vercel-dns.com`
    - **Proxy status**: **DNS only (Gray cloud)** &mdash; *This is critical so that the ESP32 can download files over raw SSL without Cloudflare proxies interfering with large chunks.*
 4. Vercel will verify the domain configuration and auto-provision the SSL certificates.

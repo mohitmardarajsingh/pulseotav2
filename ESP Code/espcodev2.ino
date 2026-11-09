@@ -1,7 +1,7 @@
 // ============================================================
 //  PulseOTA — ESP32 Firmware v0.0.2
-//  Relay control + OTA update check on boot
-//  Server: https://esp32update.vercel.app
+//  4-Channel Relay control + OTA update check on boot
+//  Server: https://pulseotav2.vercel.app
 // ============================================================
 
 #include <WiFi.h>
@@ -15,12 +15,26 @@
 //  CONFIG — change these
 // ------------------------------------------------------------
 #define CURRENT_VERSION   "0.0.2"
-#define RELAY_PIN         26
+
+// 4-Channel Relay GPIO Pins (Relay 1: GPIO 32, Relay 2: GPIO 33, Relay 3: GPIO 26, Relay 4: GPIO 27)
+#define RELAY1_PIN        32
+#define RELAY2_PIN        33
+#define RELAY3_PIN        26
+#define RELAY4_PIN        27
+
+const int relayPins[4] = { RELAY1_PIN, RELAY2_PIN, RELAY3_PIN, RELAY4_PIN };
+const int NUM_RELAYS = 4;
+
+// Relay trigger logic:
+// Set to HIGH if your relay module is Active-HIGH (HIGH = Relay ON, LOW = Relay OFF)
+// Set to LOW if your relay module is Active-LOW (LOW = Relay ON, HIGH = Relay OFF)
+#define RELAY_ON_STATE    HIGH
+#define RELAY_OFF_STATE   LOW
 
 const char* WIFI_SSID     = "testota";
 const char* WIFI_PASSWORD = "12345678";
 
-const char* VERSION_URL   = "https://esp32update.vercel.app/ota/version.json";
+const char* VERSION_URL   = "https://pulseotav2.vercel.app/ota/version.json";
 
 // ------------------------------------------------------------
 //  RELAY SETTINGS
@@ -33,6 +47,15 @@ const char* VERSION_URL   = "https://esp32update.vercel.app/ota/version.json";
 // ------------------------------------------------------------
 #define OTA_CHECK_INTERVAL 120000 // 2 minutes (120,000 milliseconds)
 unsigned long lastOTACheck = 0;
+
+// ------------------------------------------------------------
+//  Helper — Set All Relays
+// ------------------------------------------------------------
+void setAllRelays(int state) {
+  for (int i = 0; i < NUM_RELAYS; i++) {
+    digitalWrite(relayPins[i], state);
+  }
+}
 
 // ------------------------------------------------------------
 //  WiFi Connect
@@ -124,9 +147,9 @@ void checkOTA() {
   Serial.printf("[OTA] New version [%s] available! Initiating update...\n", serverVersion);
   Serial.printf("[OTA] Binary download URL: %s\n", firmwareUrl);
 
-  // Disable relay during update for safety
-  Serial.printf("[OTA] Disabling relay on pin %d for safety during flash write...\n", RELAY_PIN);
-  digitalWrite(RELAY_PIN, LOW);
+  // Disable all 4 relays during update for safety
+  Serial.println("[OTA] Disabling all 4 relays for safety during flash write...");
+  setAllRelays(RELAY_OFF_STATE);
 
   WiFiClientSecure updateClient;
   updateClient.setInsecure(); // Skip SSL certificate verification
@@ -163,8 +186,12 @@ void setup() {
   Serial.println(CURRENT_VERSION);
   Serial.println("============================================");
 
-  pinMode(RELAY_PIN, OUTPUT);
-  digitalWrite(RELAY_PIN, LOW);
+  // Initialize all 4 relay pins
+  for (int i = 0; i < NUM_RELAYS; i++) {
+    pinMode(relayPins[i], OUTPUT);
+    digitalWrite(relayPins[i], RELAY_OFF_STATE);
+  }
+  Serial.println("[SETUP] 4-Channel Relay initialized (Pins: 32, 33, 26, 27) in OFF state.");
 
   // Step 1 — Connect to WiFi
   connectWiFi();
@@ -174,11 +201,11 @@ void setup() {
   lastOTACheck = millis();
 
   // Step 3 — If no update, continue with normal operation
-  Serial.println("[MAIN] Starting relay operation...");
+  Serial.println("[MAIN] Starting 4-channel relay operation...");
 }
 
 // ------------------------------------------------------------
-//  Main Loop — Relay ON/OFF cycle with periodic OTA update checks
+//  Main Loop — 4-Channel Relay ON/OFF cycle with periodic OTA update checks
 // ------------------------------------------------------------
 void loop() {
   // Check for updates periodically (non-blocking)
@@ -189,11 +216,11 @@ void loop() {
     checkOTA();
   }
 
-  Serial.println("[RELAY] ON");
-  digitalWrite(RELAY_PIN, HIGH);
+  Serial.println("[4-CH RELAYS] All 4 Channels ON");
+  setAllRelays(RELAY_ON_STATE);
   delay(RELAY_ON_DELAY);
 
-  Serial.println("[RELAY] OFF");
-  digitalWrite(RELAY_PIN, LOW);
+  Serial.println("[4-CH RELAYS] All 4 Channels OFF");
+  setAllRelays(RELAY_OFF_STATE);
   delay(RELAY_OFF_DELAY);
 }

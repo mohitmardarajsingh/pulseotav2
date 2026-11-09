@@ -3,8 +3,8 @@ VERSION 0.0.1 CONFIG
 ============================================================
 {
     "version": "0.0.1",
-    "url": "https://esp32update.vercel.app/ota/firmware_0.0.1.bin",
-    "notes": "Relay delay: 5s ON / 5s OFF"
+    "url": "https://pulseotav2.vercel.app/ota/firmware_0.0.1.bin",
+    "notes": "4-Channel Relay delay: 5s ON / 5s OFF"
 }
 
 ============================================================
@@ -12,8 +12,8 @@ VERSION 0.0.2 CONFIG
 ============================================================
 {
     "version": "0.0.2",
-    "url": "https://esp32update.vercel.app/ota/firmware_0.0.2.bin",
-    "notes": "Relay delay: 2s ON / 0.5s OFF"
+    "url": "https://pulseotav2.vercel.app/ota/firmware_0.0.2.bin",
+    "notes": "4-Channel Relay delay: 2s ON / 0.5s OFF"
 }
 
 ============================================================
@@ -21,8 +21,8 @@ VERSION 0.0.3 CONFIG
 ============================================================
 {
     "version": "0.0.3",
-    "url": "https://esp32update.vercel.app/ota/firmware_0.0.3.bin",
-    "notes": "Relay delay: 0.5s ON / 1s OFF"
+    "url": "https://pulseotav2.vercel.app/ota/firmware_0.0.3.bin",
+    "notes": "4-Channel Relay delay: 0.5s ON / 1s OFF"
 }
 
 ============================================================
@@ -30,6 +30,42 @@ VERSION 0.0.4 CONFIG
 ============================================================
 {
     "version": "0.0.4",
-    "url": "https://esp32update.vercel.app/ota/firmware_0.0.4.bin",
-    "notes": "Relay delay: 0.1s ON / 1s OFF"
+    "url": "https://pulseotav2.vercel.app/ota/firmware_0.0.4.bin",
+    "notes": "4-Channel Relay delay: 0.1s ON / 1s OFF"
+}
+
+============================================================
+VERSION 0.0.5 CONFIG
+============================================================
+{
+    "version": "0.0.5",
+    "url": "https://pulseotav2.vercel.app/ota/firmware_0.0.5.bin",
+    "notes": "Pattern: Sequential Chaser (1 -> 2 -> 3 -> 4)"
+}
+
+============================================================
+VERSION 0.0.6 CONFIG
+============================================================
+{
+    "version": "0.0.6",
+    "url": "https://pulseotav2.vercel.app/ota/firmware_0.0.6.bin",
+    "notes": "Pattern: Cascade Fill & Empty (Stack 1->2->3->4, Drain 4->3->2->1)"
+}
+
+============================================================
+VERSION 0.0.7 CONFIG
+============================================================
+{
+    "version": "0.0.7",
+    "url": "https://pulseotav2.vercel.app/ota/firmware_0.0.7.bin",
+    "notes": "Pattern: Alternating Pairs / Odd-Even Strobe (1+3 ON / 2+4 OFF, then flip)"
+}
+
+============================================================
+VERSION 0.0.8 CONFIG
+============================================================
+{
+    "version": "0.0.8",
+    "url": "https://pulseotav2.vercel.app/ota/firmware_0.0.8.bin",
+    "notes": "Pattern: Knight Rider / Bounce Scanner (1 -> 2 -> 3 -> 4 -> 3 -> 2)"
 }

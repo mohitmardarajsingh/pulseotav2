@@ -1,7 +1,7 @@
 // ============================================================
-//  PulseOTA — ESP32 Firmware v0.0.3
-//  Relay control + OTA update check on boot
-//  Server: https://esp32update.vercel.app
+//  PulseOTA — ESP32 Firmware v0.0.7
+//  4-Channel Relay Pattern: Alternating Pairs / Odd-Even Strobe
+//  Server: https://pulseotav2.vercel.app
 // ============================================================
 
 #include <WiFi.h>
@@ -14,25 +14,53 @@
 // ------------------------------------------------------------
 //  CONFIG — change these
 // ------------------------------------------------------------
-#define CURRENT_VERSION   "0.0.3"
-#define RELAY_PIN         26
+#define CURRENT_VERSION   "0.0.7"
+
+// 4-Channel Relay GPIO Pins (Relay 1: GPIO 32, Relay 2: GPIO 33, Relay 3: GPIO 26, Relay 4: GPIO 27)
+#define RELAY1_PIN        32
+#define RELAY2_PIN        33
+#define RELAY3_PIN        26
+#define RELAY4_PIN        27
+
+const int relayPins[4] = { RELAY1_PIN, RELAY2_PIN, RELAY3_PIN, RELAY4_PIN };
+const int NUM_RELAYS = 4;
+
+// Relay trigger logic:
+// Set to HIGH if your relay module is Active-HIGH (HIGH = Relay ON, LOW = Relay OFF)
+// Set to LOW if your relay module is Active-LOW (LOW = Relay ON, HIGH = Relay OFF)
+#define RELAY_ON_STATE    HIGH
+#define RELAY_OFF_STATE   LOW
 
 const char* WIFI_SSID     = "testota";
 const char* WIFI_PASSWORD = "12345678";
 
-const char* VERSION_URL   = "https://esp32update.vercel.app/ota/version.json";
+const char* VERSION_URL   = "https://pulseotav2.vercel.app/ota/version.json";
 
 // ------------------------------------------------------------
-//  RELAY SETTINGS
+//  PATTERN SETTINGS — Alternating Pairs
 // ------------------------------------------------------------
-#define RELAY_ON_DELAY    500
-#define RELAY_OFF_DELAY   1000
+#define TOGGLE_INTERVAL   800  // Milliseconds between swapping active pairs
 
 // ------------------------------------------------------------
 //  PERIODIC CHECK SETTINGS
 // ------------------------------------------------------------
 #define OTA_CHECK_INTERVAL 120000 // 2 minutes (120,000 milliseconds)
 unsigned long lastOTACheck = 0;
+
+// ------------------------------------------------------------
+//  Relay Helpers
+// ------------------------------------------------------------
+void setAllRelays(int state) {
+  for (int i = 0; i < NUM_RELAYS; i++) {
+    digitalWrite(relayPins[i], state);
+  }
+}
+
+void setRelay(int channel, int state) {
+  if (channel >= 1 && channel <= NUM_RELAYS) {
+    digitalWrite(relayPins[channel - 1], state);
+  }
+}
 
 // ------------------------------------------------------------
 //  WiFi Connect
@@ -124,9 +152,9 @@ void checkOTA() {
   Serial.printf("[OTA] New version [%s] available! Initiating update...\n", serverVersion);
   Serial.printf("[OTA] Binary download URL: %s\n", firmwareUrl);
 
-  // Disable relay during update for safety
-  Serial.printf("[OTA] Disabling relay on pin %d for safety during flash write...\n", RELAY_PIN);
-  digitalWrite(RELAY_PIN, LOW);
+  // Disable all 4 relays during update for safety
+  Serial.println("[OTA] Disabling all 4 relays for safety during flash write...");
+  setAllRelays(RELAY_OFF_STATE);
 
   WiFiClientSecure updateClient;
   updateClient.setInsecure(); // Skip SSL certificate verification
@@ -161,10 +189,15 @@ void setup() {
   Serial.println("============================================");
   Serial.print("  PulseOTA Firmware v");
   Serial.println(CURRENT_VERSION);
+  Serial.println("  Pattern: Alternating Pairs (Odd vs Even)");
   Serial.println("============================================");
 
-  pinMode(RELAY_PIN, OUTPUT);
-  digitalWrite(RELAY_PIN, LOW);
+  // Initialize all 4 relay pins
+  for (int i = 0; i < NUM_RELAYS; i++) {
+    pinMode(relayPins[i], OUTPUT);
+    digitalWrite(relayPins[i], RELAY_OFF_STATE);
+  }
+  Serial.println("[SETUP] 4-Channel Relay initialized (Pins: 32, 33, 26, 27) in OFF state.");
 
   // Step 1 — Connect to WiFi
   connectWiFi();
@@ -174,11 +207,11 @@ void setup() {
   lastOTACheck = millis();
 
   // Step 3 — If no update, continue with normal operation
-  Serial.println("[MAIN] Starting relay operation...");
+  Serial.println("[MAIN] Starting Alternating Pairs pattern...");
 }
 
 // ------------------------------------------------------------
-//  Main Loop — Relay ON/OFF cycle with periodic OTA update checks
+//  Main Loop — Alternating Pairs (Odd vs Even)
 // ------------------------------------------------------------
 void loop() {
   // Check for updates periodically (non-blocking)
@@ -189,11 +222,19 @@ void loop() {
     checkOTA();
   }
 
-  Serial.println("[RELAY] ON");
-  digitalWrite(RELAY_PIN, HIGH);
-  delay(RELAY_ON_DELAY);
+  // Phase A: Odd channels (1 & 3) ON, Even channels (2 & 4) OFF
+  Serial.println("[PAIRS] Group A ON (Channels 1 & 3) | Group B OFF (Channels 2 & 4)");
+  setRelay(1, RELAY_ON_STATE);
+  setRelay(3, RELAY_ON_STATE);
+  setRelay(2, RELAY_OFF_STATE);
+  setRelay(4, RELAY_OFF_STATE);
+  delay(TOGGLE_INTERVAL);
 
-  Serial.println("[RELAY] OFF");
-  digitalWrite(RELAY_PIN, LOW);
-  delay(RELAY_OFF_DELAY);
+  // Phase B: Odd channels (1 & 3) OFF, Even channels (2 & 4) ON
+  Serial.println("[PAIRS] Group A OFF (Channels 1 & 3) | Group B ON (Channels 2 & 4)");
+  setRelay(1, RELAY_OFF_STATE);
+  setRelay(3, RELAY_OFF_STATE);
+  setRelay(2, RELAY_ON_STATE);
+  setRelay(4, RELAY_ON_STATE);
+  delay(TOGGLE_INTERVAL);
 }
