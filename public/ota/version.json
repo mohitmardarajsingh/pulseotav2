@@ -1,5 +1,5 @@
 {
-    "version": "0.0.5",
-    "url": "https://pulseotav2.vercel.app/ota/firmware_0.0.5.bin",
-    "notes": "Pattern: Sequential Chaser (1 -> 2 -> 3 -> 4)"
+    "version": "0.0.1",
+    "url": "https://pulseotav2.vercel.app/ota/firmware_0.0.1.bin",
+    "notes": "4-Channel Relay delay: 5s ON / 5s OFF"
 }
