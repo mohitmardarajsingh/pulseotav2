@@ -1,5 +1,5 @@
 {
-    "version": "0.0.6",
-    "url": "https://pulseotav2.vercel.app/ota/firmware_0.0.6.bin",
-    "notes": "Pattern: Cascade Fill & Empty (Stack 1->2->3->4, Drain 4->3->2->1)"
+    "version": "0.0.8",
+    "url": "https://pulseotav2.vercel.app/ota/firmware_0.0.8.bin",
+    "notes": "Pattern: Knight Rider / Bounce Scanner (1 -> 2 -> 3 -> 4 -> 3 -> 2)"
 }
