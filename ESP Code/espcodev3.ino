@@ -8,10 +8,8 @@
 #include <WiFiClient.h>
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
-#include <Update.h>
+#include <HTTPUpdate.h>
 #include <ArduinoJson.h>
-#include <esp_ota_ops.h>
-#include <esp_partition.h>
 
 // ------------------------------------------------------------
 //  CONFIG — change these
@@ -91,7 +89,7 @@ void connectWiFi() {
 }
 
 // ------------------------------------------------------------
-//  OTA Update Check
+//  OTA Update Check (Clean & Proven HTTPUpdate Architecture)
 // ------------------------------------------------------------
 void checkOTA() {
   if (WiFi.status() != WL_CONNECTED) {
@@ -122,7 +120,6 @@ void checkOTA() {
 
   String payload = http.getString();
   http.end();
-  secureClient.stop(); // Free TLS session buffer before downloading binary
 
   Serial.println("[OTA] Metadata fetched successfully.");
   Serial.printf("[OTA] version.json raw payload:\n%s\n", payload.c_str());
@@ -153,168 +150,42 @@ void checkOTA() {
   Serial.printf("[OTA] New version [%s] available! Initiating update...\n", serverVersion);
   Serial.printf("[OTA] Binary download URL: %s\n", firmwareUrl);
 
-  // Check if ESP32 flash partition table actually has an OTA partition
-  const esp_partition_t* updatePartition = esp_ota_get_next_update_partition(NULL);
-  if (!updatePartition) {
-    Serial.println("[OTA] CRITICAL ERROR: No OTA partition found on ESP32!");
-    Serial.println("[OTA] Reason: Arduino IDE Partition Scheme is likely set to 'Huge APP (No OTA)'.");
-    Serial.println("[OTA] Fix: In Arduino IDE, change Tools -> Partition Scheme to 'Minimal SPIFFS (1.9MB APP with OTA)' or 'Default 4MB with ffat' and re-flash via USB.");
-    return;
-  }
-  Serial.printf("[OTA] Target OTA Partition: %s (Available space: %u bytes)\n", updatePartition->label, updatePartition->size);
-  Serial.printf("[OTA] Free Heap: %d bytes\n", ESP.getFreeHeap());
-
-  // Perform direct streaming OTA update
-  performOTA(String(firmwareUrl));
-}
-
-// ------------------------------------------------------------
-//  Direct Stream OTA Flashing Engine (Minimal & Fast)
-// ------------------------------------------------------------
-void performOTA(const String& firmwareUrl) {
-  Serial.printf("[OTA] Connecting to firmware server: %s\n", firmwareUrl.c_str());
-
   // Disable all 4 relays during update for safety
+  Serial.println("[OTA] Disabling all relays for safety during flash write...");
   setAllRelays(RELAY_OFF_STATE);
 
-  // Step 1: Probe server to retrieve exact Content-Length
-  int contentLength = 0;
-  {
-    WiFiClientSecure probeClient;
-    probeClient.setInsecure();
+  WiFiClientSecure updateClient;
+  updateClient.setInsecure(); // Skip SSL certificate verification
 
-    HTTPClient probeHttp;
-    probeHttp.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
-    probeHttp.setTimeout(15000);
-
-    if (!probeHttp.begin(probeClient, firmwareUrl)) {
-      Serial.println("[OTA] Error: Unable to connect to server.");
-      return;
-    }
-
-    Serial.println("[OTA] Checking firmware binary size...");
-    int httpCode = probeHttp.GET();
-    Serial.printf("[OTA] Server HTTP Response Code: %d\n", httpCode);
-
-    if (httpCode != HTTP_CODE_OK && httpCode != HTTP_CODE_PARTIAL_CONTENT) {
-      Serial.printf("[OTA] Failed, HTTP error code: %d\n", httpCode);
-      probeHttp.end();
-      return;
-    }
-
-    contentLength = probeHttp.getSize();
-    probeHttp.end();
-    probeClient.stop(); // Free probe TLS session immediately
-  }
-
-  Serial.printf("[OTA] Firmware binary size: %d bytes\n", contentLength);
-
-  if (contentLength <= 0) {
-    Serial.println("[OTA] Error: Invalid firmware size.");
-    return;
-  }
-
-  if (!Update.begin(contentLength)) {
-    Serial.printf("[OTA] Update.begin failed! Error: %s\n", Update.errorString());
-    return;
-  }
-
-  Serial.println("[OTA] Downloading and flashing firmware in chunks...");
-
-  // Step 2: Download in 256 KB chunks (aligned to 4KB sectors) to stay well under Vercel's 60s timeout
-  const size_t CHUNK_SIZE = 256 * 1024; // 262,144 bytes (~12s per chunk)
-  size_t totalWritten = 0;
-  static uint8_t buf[2048]; // Static buffer (0 stack usage)
-  int lastProgress = -1;
-
-  while (totalWritten < (size_t)contentLength) {
-    size_t chunkEnd = totalWritten + CHUNK_SIZE - 1;
-    if (chunkEnd >= (size_t)contentLength) {
-      chunkEnd = contentLength - 1;
-    }
-    size_t expectedBytes = (chunkEnd - totalWritten) + 1;
-
-    WiFiClientSecure chunkClient;
-    chunkClient.setInsecure();
-
-    HTTPClient chunkHttp;
-    chunkHttp.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
-    chunkHttp.setTimeout(25000);
-
-    if (!chunkHttp.begin(chunkClient, firmwareUrl)) {
-      Serial.println("[OTA] Error: Failed to begin chunk HTTP connection.");
-      Update.abort();
-      return;
-    }
-
-    char rangeHeader[48];
-    snprintf(rangeHeader, sizeof(rangeHeader), "bytes=%u-%u", (unsigned int)totalWritten, (unsigned int)chunkEnd);
-    chunkHttp.addHeader("Range", rangeHeader);
-
-    Serial.printf("[OTA] Requesting chunk: %s (%u bytes)...\n", rangeHeader, (unsigned int)expectedBytes);
-    int httpCode = chunkHttp.GET();
-
-    if (httpCode != HTTP_CODE_OK && httpCode != HTTP_CODE_PARTIAL_CONTENT) {
-      Serial.printf("[OTA] Chunk request failed. HTTP code: %d\n", httpCode);
-      chunkHttp.end();
-      Update.abort();
-      return;
-    }
-
-    WiFiClient* stream = chunkHttp.getStreamPtr();
-    stream->setTimeout(20000); // 20-second read timeout per readBytes call
-
-    size_t chunkRead = 0;
-    while (chunkRead < expectedBytes) {
-      size_t toRead = expectedBytes - chunkRead;
-      if (toRead > sizeof(buf)) {
-        toRead = sizeof(buf);
-      }
-
-      int r = stream->readBytes((char*)buf, toRead);
-      if (r <= 0) {
-        Serial.printf("\n[OTA] Error: Stream timeout waiting for chunk data (%u / %u bytes read).\n", (unsigned int)chunkRead, (unsigned int)expectedBytes);
-        chunkHttp.end();
-        Update.abort();
-        return;
-      }
-
-      size_t w = Update.write(buf, r);
-      if (w != (size_t)r) {
-        Serial.println("\n[OTA] Flash write error!");
-        chunkHttp.end();
-        Update.abort();
-        return;
-      }
-
-      chunkRead += r;
-      totalWritten += r;
-
-      int progress = (totalWritten * 100) / contentLength;
+  // Show OTA download progress in Serial Monitor
+  httpUpdate.onProgress([](int cur, int total) {
+    static int lastProgress = -1;
+    if (total > 0) {
+      int progress = (cur * 100) / total;
       if (progress % 10 == 0 && progress != lastProgress) {
-        Serial.printf("[OTA] Progress: %d%% (%u / %d bytes)\n", progress, (unsigned int)totalWritten, contentLength);
+        Serial.printf("[OTA] Progress: %d%% (%d / %d bytes)\n", progress, cur, total);
         lastProgress = progress;
       }
     }
+  });
 
-    chunkHttp.end();
-    chunkClient.stop();
-  }
+  Serial.println("[OTA] Downloading and applying firmware binary...");
+  t_httpUpdate_return result = httpUpdate.update(updateClient, String(firmwareUrl));
 
-  Serial.printf("[OTA] Total bytes written: %u of %d\n", (unsigned int)totalWritten, contentLength);
+  switch (result) {
+    case HTTP_UPDATE_FAILED:
+      Serial.printf("[OTA] Update FAILED. Error Code (%d): %s\n",
+        httpUpdate.getLastError(),
+        httpUpdate.getLastErrorString().c_str());
+      break;
 
-  if (Update.end()) {
-    if (Update.isFinished()) {
-      Serial.println("============================================");
-      Serial.println("[OTA] UPDATE SUCCESSFUL! Rebooting device...");
-      Serial.println("============================================");
-      delay(1000);
-      ESP.restart();
-    } else {
-      Serial.println("[OTA] Error: Update not finished.");
-    }
-  } else {
-    Serial.printf("[OTA] Error: %s\n", Update.errorString());
+    case HTTP_UPDATE_NO_UPDATES:
+      Serial.println("[OTA] Update failed: Server returned 'no updates'.");
+      break;
+
+    case HTTP_UPDATE_OK:
+      Serial.println("[OTA] Update completed successfully! Rebooting device...");
+      break;
   }
 }
 
