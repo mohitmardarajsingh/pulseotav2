@@ -175,6 +175,9 @@ void checkOTA() {
     }
   });
 
+  // Follow HTTP 307/302 redirects (required for GitHub Releases)
+  httpUpdate.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
+
   Serial.println("[OTA] Downloading and applying firmware binary...");
   t_httpUpdate_return result = httpUpdate.update(updateClient, String(firmwareUrl));
 
