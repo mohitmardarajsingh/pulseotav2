@@ -218,7 +218,42 @@ void performOTA(const String& firmwareUrl) {
 
   Serial.println("[OTA] Flashing firmware into memory... Please wait.");
   WiFiClient* stream = http.getStreamPtr();
-  size_t written = Update.writeStream(*stream);
+  stream->setTimeout(15000); // 15 seconds stream read timeout
+
+  size_t written = 0;
+  uint8_t buff[2048];
+  int lastProgress = -1;
+  unsigned long timeoutStart = millis();
+
+  while (http.connected() && (written < (size_t)contentLength)) {
+    size_t available = stream->available();
+    if (available > 0) {
+      size_t toRead = available > sizeof(buff) ? sizeof(buff) : available;
+      size_t bytesRead = stream->readBytes(buff, toRead);
+      size_t bytesWritten = Update.write(buff, bytesRead);
+
+      if (bytesWritten != bytesRead) {
+        Serial.printf("[OTA] Flash write mismatch (Read: %d, Written: %d)\n", bytesRead, bytesWritten);
+        break;
+      }
+
+      written += bytesWritten;
+      timeoutStart = millis(); // Reset timeout since data packet arrived
+
+      int progress = (written * 100) / contentLength;
+      if (progress % 10 == 0 && progress != lastProgress) {
+        Serial.printf("[OTA] Progress: %d%% (%u / %d bytes)\n", progress, written, contentLength);
+        lastProgress = progress;
+      }
+    } else {
+      delay(2);
+      yield();
+      if (millis() - timeoutStart > 25000) { // 25 seconds of continuous silence before declaring timeout
+        Serial.println("[OTA] Error: Stream stalled (no data received for 25s).");
+        break;
+      }
+    }
+  }
 
   Serial.printf("[OTA] Total bytes written: %u of %d\n", written, contentLength);
 
