@@ -10,6 +10,8 @@
 #include <HTTPClient.h>
 #include <HTTPUpdate.h>
 #include <ArduinoJson.h>
+#include <esp_ota_ops.h>
+#include <esp_partition.h>
 
 // ------------------------------------------------------------
 //  CONFIG — change these
@@ -124,6 +126,7 @@ void checkOTA() {
 
   String payload = http.getString();
   http.end();
+  secureClient.stop(); // Free TLS session buffer before downloading binary
 
   Serial.println("[OTA] Metadata fetched successfully.");
   Serial.printf("[OTA] version.json raw payload:\n%s\n", payload.c_str());
@@ -154,12 +157,28 @@ void checkOTA() {
   Serial.printf("[OTA] New version [%s] available! Initiating update...\n", serverVersion);
   Serial.printf("[OTA] Binary download URL: %s\n", firmwareUrl);
 
+  // Check if ESP32 flash partition table actually has an OTA partition
+  const esp_partition_t* updatePartition = esp_ota_get_next_update_partition(NULL);
+  if (!updatePartition) {
+    Serial.println("[OTA] CRITICAL ERROR: No OTA partition found on ESP32!");
+    Serial.println("[OTA] Reason: Arduino IDE Partition Scheme is likely set to 'Huge APP (No OTA)'.");
+    Serial.println("[OTA] Fix: In Arduino IDE, change Tools -> Partition Scheme to 'Minimal SPIFFS (1.9MB APP with OTA)' or 'Default 4MB with ffat' and re-flash via USB.");
+    return;
+  }
+  Serial.printf("[OTA] Target OTA Partition: %s (Available space: %u bytes)\n", updatePartition->label, updatePartition->size);
+  Serial.printf("[OTA] Free Heap: %d bytes\n", ESP.getFreeHeap());
+
   // Disable all 4 relays during update for safety
   Serial.println("[OTA] Disabling all 4 relays for safety during flash write...");
   setAllRelays(RELAY_OFF_STATE);
 
   WiFiClientSecure updateClient;
   updateClient.setInsecure(); // Skip SSL certificate verification
+  updateClient.setTimeout(30); // 30 seconds socket timeout for downloading binary
+
+  // Follow HTTP 301/302/307/308 redirects from Vercel edge CDN
+  httpUpdate.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
+  httpUpdate.rebootOnUpdate(true);
 
   Serial.println("[OTA] Downloading and applying firmware binary...");
   t_httpUpdate_return result = httpUpdate.update(updateClient, String(firmwareUrl));
