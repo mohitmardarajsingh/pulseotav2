@@ -1,5 +1,14 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  async redirects() {
+    return [
+      {
+        source: '/ota/firmware_:version.bin',
+        destination: 'https://github.com/mohitmardarajsingh/pulseotav2/releases/download/pulseotav2binaries/firmware_:version.bin',
+        permanent: false,
+      },
+    ];
+  },
   async headers() {
     return [
       {
