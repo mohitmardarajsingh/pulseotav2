@@ -1,0 +1,5 @@
+{
+    "version": "0.0.5",
+    "url": "https://esp32update.vercel.app/ota/firmware_0.0.5.bin",
+    "notes": "Relay delay: 0.1s ON / 1s OFF"
+}

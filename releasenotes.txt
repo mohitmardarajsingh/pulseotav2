@@ -1,0 +1,35 @@
+============================================================
+VERSION 0.0.1 CONFIG
+============================================================
+{
+    "version": "0.0.1",
+    "url": "https://esp32update.vercel.app/ota/firmware_0.0.1.bin",
+    "notes": "Relay delay: 5s ON / 5s OFF"
+}
+
+============================================================
+VERSION 0.0.2 CONFIG
+============================================================
+{
+    "version": "0.0.2",
+    "url": "https://esp32update.vercel.app/ota/firmware_0.0.2.bin",
+    "notes": "Relay delay: 2s ON / 0.5s OFF"
+}
+
+============================================================
+VERSION 0.0.3 CONFIG
+============================================================
+{
+    "version": "0.0.3",
+    "url": "https://esp32update.vercel.app/ota/firmware_0.0.3.bin",
+    "notes": "Relay delay: 0.5s ON / 1s OFF"
+}
+
+============================================================
+VERSION 0.0.4 CONFIG
+============================================================
+{
+    "version": "0.0.4",
+    "url": "https://esp32update.vercel.app/ota/firmware_0.0.4.bin",
+    "notes": "Relay delay: 0.1s ON / 1s OFF"
+}
