@@ -1,5 +1,5 @@
 {
-    "version": "0.0.3",
-    "url": "https://pulseotav2.vercel.app/ota/firmware_0.0.3.bin",
-    "notes": "4-Channel Relay delay: 0.5s ON / 1s OFF"
+    "version": "0.0.8",
+    "url": "https://pulseotav2.vercel.app/ota/firmware_0.0.8.bin",
+    "notes": "Pattern: Knight Rider / Bounce Scanner (1 -> 2 -> 3 -> 4 -> 3 -> 2)"
 }
