@@ -1,5 +1,5 @@
 {
-    "version": "0.0.7",
-    "url": "https://pulseotav2.vercel.app/ota/firmware_0.0.7.bin",
-    "notes": "Pattern: Alternating Pairs / Odd-Even Strobe (1+3 ON / 2+4 OFF, then flip)"
+    "version": "0.0.8",
+    "url": "https://pulseotav2.vercel.app/ota/firmware_0.0.8.bin",
+    "notes": "Pattern: Knight Rider / Bounce Scanner (1 -> 2 -> 3 -> 4 -> 3 -> 2)"
 }
